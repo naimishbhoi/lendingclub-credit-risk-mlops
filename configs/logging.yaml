@@ -1,0 +1,3 @@
+level: INFO               # DEBUG, INFO, WARNING, ERROR, CRITICAL      # Logging level
+enable_file: false       # Console logging only
+log_dir: logs             # used only if enable_file is true

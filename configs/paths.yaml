@@ -1,0 +1,3 @@
+artifacts_root: artifacts\metadata
+models_dir: models
+metrics_dir: metrics

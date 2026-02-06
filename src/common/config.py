@@ -15,6 +15,7 @@ from src.schemas.config_schemas import (
     DataConfig,
     PathsConfig,
     TrainingConfig,
+    LoggingConfig
 )
 
 
@@ -51,7 +52,7 @@ def load_config_dir(config_dir: str) -> Dict[str, Any]:
         "tuning.yaml",
         "evaluation.yaml",
         "inference.yaml",
-        "monitoring.yaml",
+        "logging.yaml",
         "paths.yaml",
     ]
 
@@ -71,6 +72,7 @@ class AppConfig(BaseModel):
     data: DataConfig
     training: TrainingConfig
     paths: PathsConfig
+    logging: LoggingConfig
 
     class Config:
         extra = "forbid"
@@ -82,11 +84,18 @@ def load_app_config(config_dir: str) -> AppConfig:
 
     raw_configs = load_config_dir(config_dir)
 
+    required_sections = {"data", "training", "paths", "logging"}
+    missing = required_sections - raw_configs.keys()
+
+    if missing:
+        raise ConfigLoadError(f"Missing required config sections: {sorted(missing)}")
+
     try:
         app_config = AppConfig(
-            data=raw_configs["data"],
-            training=raw_configs["training"],
-            paths=raw_configs["paths"],
+            data = raw_configs["data"],
+            training = raw_configs["training"],
+            paths = raw_configs["paths"],
+            logging = raw_configs["logging"]
         )
         return app_config
 
@@ -98,19 +107,19 @@ def save_config_snapshot(config: AppConfig, output_dir: str) -> None:
     """Save a snapshot of the current configuration to a YAML file."""
 
     output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    output_path.mkdir(parents = True, exist_ok = True)
 
     config_dict = config.model_dump()
 
     snapshot_file = output_path / "config_snapshot.yaml"
-    with open(snapshot_file, "w", encoding="utf-8") as file:
+    with open(snapshot_file, "w", encoding = "utf-8") as file:
         yaml.safe_dump(config_dict, file, sort_keys=True)
 
     # Additionally, save a hash of the configuration for integrity checks
     config_json = json.dumps(
-        config_dict, sort_keys=True, separators=(",", ": ")
+        config_dict, sort_keys = True, separators = (",", ": ")
     ).encode("utf-8")
     config_hash = hashlib.sha256(config_json).hexdigest()
 
     hash_file = output_path / "config_hash.txt"
-    hash_file.write_text(config_hash, encoding="utf-8")
+    hash_file.write_text(config_hash, encoding = "utf-8")

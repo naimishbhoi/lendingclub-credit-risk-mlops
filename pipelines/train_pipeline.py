@@ -5,23 +5,35 @@ Purpose: End-to-end training pipeline for the LendingClub credit risk model.
 
 import sys
 from src.common.cli import build_base_parser
-from src.common.config import load_config_dir, ConfigLoadError
+from src.common.config import load_app_config, ConfigLoadError
+from src.common.logging import get_logger, set_run_id
 
 def main() -> None:
     """Main function to execute the training pipeline."""
     parser = build_base_parser("LendingClub Credit Risk Model Training Pipeline")
     args = parser.parse_args()
+    logger = get_logger(__name__)
 
     try:
-        config = load_config_dir(args.config_dir)
-        print("Configuration loaded successfully.")
+        config = load_app_config(args.config_dir)
+        run_id = set_run_id()
+
+        logger = get_logger(
+            __name__,
+            level = config.logging.level,
+            enable_file = config.logging.enable_file,
+            log_dir = config.logging.log_dir,
+        )
+
+        logger.info("Training pipeline config loaded successfully")
+        logger.info(f"Run ID: {run_id}")
+        logger.info("Run completed successfully (placeholder)")
+    
     
     except ConfigLoadError as e:
-        print(f"[ERROR] Failed to load configuration: {e}", file=sys.stderr)
+        logger.exception("Failed to load configuration")
         sys.exit(1)
 
-    # Placeholder: actual training logic comes later
-    print("Training pipeline config loaded successfully")
-
+ 
 if __name__ == "__main__":
     main()

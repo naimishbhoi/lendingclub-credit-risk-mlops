@@ -1,0 +1,2 @@
+model_type: xgboost
+random_state: 42
