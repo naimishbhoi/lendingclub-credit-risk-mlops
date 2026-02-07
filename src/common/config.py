@@ -13,9 +13,9 @@ from pydantic import BaseModel, ValidationError
 
 from src.schemas.config_schemas import (
     DataConfig,
+    LoggingConfig,
     PathsConfig,
     TrainingConfig,
-    LoggingConfig
 )
 
 
@@ -92,10 +92,10 @@ def load_app_config(config_dir: str) -> AppConfig:
 
     try:
         app_config = AppConfig(
-            data = raw_configs["data"],
-            training = raw_configs["training"],
-            paths = raw_configs["paths"],
-            logging = raw_configs["logging"]
+            data=raw_configs["data"],
+            training=raw_configs["training"],
+            paths=raw_configs["paths"],
+            logging=raw_configs["logging"],
         )
         return app_config
 
@@ -107,19 +107,19 @@ def save_config_snapshot(config: AppConfig, output_dir: str) -> None:
     """Save a snapshot of the current configuration to a YAML file."""
 
     output_path = Path(output_dir)
-    output_path.mkdir(parents = True, exist_ok = True)
+    output_path.mkdir(parents=True, exist_ok=True)
 
     config_dict = config.model_dump()
 
     snapshot_file = output_path / "config_snapshot.yaml"
-    with open(snapshot_file, "w", encoding = "utf-8") as file:
+    with open(snapshot_file, "w", encoding="utf-8") as file:
         yaml.safe_dump(config_dict, file, sort_keys=True)
 
     # Additionally, save a hash of the configuration for integrity checks
     config_json = json.dumps(
-        config_dict, sort_keys = True, separators = (",", ": ")
+        config_dict, sort_keys=True, separators=(",", ": ")
     ).encode("utf-8")
     config_hash = hashlib.sha256(config_json).hexdigest()
 
     hash_file = output_path / "config_hash.txt"
-    hash_file.write_text(config_hash, encoding = "utf-8")
+    hash_file.write_text(config_hash, encoding="utf-8")

@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-
 _LOGGERS = {}
 _RUN_ID: Optional[str] = None
+
 
 def set_run_id(run_id: Optional[str] = None) -> str:
     """Set a run_id for the contextual logging."""
@@ -26,19 +26,19 @@ class ContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.run_id = _RUN_ID or "_"
         return True
-    
+
 
 def _build_formatter() -> logging.Formatter:
-    fmt = (
-        "[%(asctime)s] [%(levelname)s]"
-        "[%(name)s] [%(run_id)s] %(message)s"
-    )
+    fmt = "[%(asctime)s] [%(levelname)s]" "[%(name)s] [%(run_id)s] %(message)s"
 
-    return logging.Formatter(fmt = fmt, datefmt = "%Y-%m-%d %H:%M:%S")
+    return logging.Formatter(fmt=fmt, datefmt="%Y-%m-%d %H:%M:%S")
 
 
 def _config_root_logger(
-        level: str, enable_file: bool, log_dir: str, logger_name: str,
+    level: str,
+    enable_file: bool,
+    log_dir: str,
+    logger_name: str,
 ) -> Logger:
     """Configure the root logger with the specified settings."""
 
@@ -46,10 +46,10 @@ def _config_root_logger(
 
     if logger.handlers:
         return logger
-    
+
     logger.setLevel(level)
     logger.propagate = False
-    
+
     formatter = _build_formatter()
     context_filter = ContextFilter()
 
@@ -74,20 +74,17 @@ def _config_root_logger(
 
 
 def get_logger(
-        name: str,
-        *,
-        level:str = "INFO",
-        enable_file: bool = False,
-        log_dir: Optional[str] = None,
+    name: str,
+    *,
+    level: str = "INFO",
+    enable_file: bool = False,
+    log_dir: Optional[str] = None,
 ) -> Logger:
     """Get a configured logger instance."""
 
     if name not in _LOGGERS:
         _LOGGERS[name] = _config_root_logger(
-            level = level,
-            enable_file = enable_file,
-            log_dir = log_dir,
-            logger_name = name
+            level=level, enable_file=enable_file, log_dir=log_dir, logger_name=name
         )
 
     return _LOGGERS[name]

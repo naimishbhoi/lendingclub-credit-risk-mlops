@@ -34,6 +34,7 @@ install-dev:
 # Code Quality
 # =========================
 format:
+	ruff check src tests --fix
 	black src tests
 
 lint:
@@ -41,8 +42,14 @@ lint:
 
 # =========================
 # Testing
+# =========================
 test:
 	pytest tests
+
+# ========================
+# Check
+# =========================
+check: format lint test
 
 # =========================
 # Clean Up

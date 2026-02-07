@@ -34,7 +34,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "black>=23.0,<25.0",
-    "ruff>=0.1,<0.5",
+    "ruff>=0.1.14,<0.5",
     "pytest>=7.4,<9.0",
     "pytest-cov>=4.1,<6.0",
 ]
@@ -51,15 +51,18 @@ where = ["src"]
 
 [tool.black]
 line-length = 88
-target-version = ['py310']
+target-version = ["py310"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["B", "E", "F", "I"]
 ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["credit_risk_mlops", "src"]
 
 [tool.ruff.format]
 quote-style = "double"

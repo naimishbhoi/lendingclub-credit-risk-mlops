@@ -3,9 +3,9 @@ Module: src.schemas.config_schemas
 Purpose: Pydantic schemas for validating configuration sections.
 """
 
+from typing import Literal
 
 from pydantic import BaseModel, Field
-from typing import Literal
 
 
 class DataConfig(BaseModel):
@@ -41,6 +41,7 @@ class PathsConfig(BaseModel):
     class Config:
         extra = "forbid"
         frozen = True
+
 
 class LoggingConfig(BaseModel):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
