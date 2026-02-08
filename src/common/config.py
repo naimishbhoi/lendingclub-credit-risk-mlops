@@ -11,6 +11,7 @@ from typing import Any, Dict
 import yaml
 from pydantic import BaseModel, ValidationError
 
+from src.common.exceptions import ConfigError
 from src.schemas.config_schemas import (
     DataConfig,
     LoggingConfig,
@@ -19,7 +20,7 @@ from src.schemas.config_schemas import (
 )
 
 
-class ConfigLoadError(Exception):
+class ConfigLoadError(ConfigError):
     """Custom exception for configuration loading errors."""
 
 
@@ -27,14 +28,29 @@ def _load_yaml(file_path: Path) -> Dict[str, Any]:
     """Load a YAML file and return its contents as a dictionary."""
 
     if not file_path.exists():
-        raise ConfigLoadError(f"Configuration file not found: {file_path}")
+        raise ConfigLoadError(
+            f"Configuration file not found: {file_path}",
+            metadata={"file_path": str(file_path)},
+        )
 
-    with open(file_path, "r", encoding="utf-8") as file:
-        try:
-            return yaml.safe_load(file) or {}
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            data = yaml.safe_load(file) or {}
 
-        except yaml.YAMLError as e:
-            raise ConfigLoadError(f"Error parsing YAML file: {file_path}") from e
+    except yaml.YAMLError as e:
+        raise ConfigLoadError(
+            f"Error parsing YAML file: {file_path}",
+            metadata={"file_path": str(file_path)},
+            cause=e,
+        ) from e
+    
+    if not isinstance(data, dict):
+        raise ConfigLoadError(
+            f"Invalid YAML structure (expected mapping): {file_path}",
+            metadata={"file_path": str(file_path)},
+        )
+
+    return data
 
 
 def load_config_dir(config_dir: str) -> Dict[str, Any]:
@@ -43,7 +59,10 @@ def load_config_dir(config_dir: str) -> Dict[str, Any]:
     base_path = Path(config_dir)
 
     if not base_path.exists() or not base_path.is_dir():
-        raise ConfigLoadError(f"Configuration directory not found: {config_dir}")
+        raise ConfigLoadError(
+            f"Configuration directory not found: {config_dir}",
+            metadata={"config_dir": str(config_dir)},
+        )
 
     expected_files = [
         "data.yaml",
@@ -88,19 +107,25 @@ def load_app_config(config_dir: str) -> AppConfig:
     missing = required_sections - raw_configs.keys()
 
     if missing:
-        raise ConfigLoadError(f"Missing required config sections: {sorted(missing)}")
+        raise ConfigLoadError(
+            "Missing required configuration sections",
+            metadata={"missing_sections": sorted(missing)},
+        )
 
     try:
-        app_config = AppConfig(
+        return AppConfig(
             data=raw_configs["data"],
             training=raw_configs["training"],
             paths=raw_configs["paths"],
             logging=raw_configs["logging"],
         )
-        return app_config
 
     except ValidationError as e:
-        raise ConfigLoadError("Configuration validation error") from e
+        raise ConfigLoadError(
+            "Configuration validation error",
+            metadata={"config_dir": str(config_dir)},
+            cause=e,
+        ) from e
 
 
 def save_config_snapshot(config: AppConfig, output_dir: str) -> None:

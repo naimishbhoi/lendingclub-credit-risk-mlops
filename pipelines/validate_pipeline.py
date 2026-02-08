@@ -4,19 +4,22 @@ Purpose: Orchestrate the dataset and schema validation pipeline.
 """
 
 import sys
+
 from src.common.cli import build_base_parser
-from src.common.config import load_app_config, ConfigLoadError
+from src.common.config import load_app_config
 from src.common.logging import get_logger, set_run_id
+from src.common.exceptions import MLSystemError, PipelineError
 
 def main() -> None:
     """Main function to execute the validation pipeline."""
     parser = build_base_parser("Dataset & Schema Validation Pipeline")
     args = parser.parse_args()
+    
+    run_id = set_run_id()
+    logger = get_logger(__name__)
 
     try:
         config = load_app_config(args.config_dir)
-        run_id = set_run_id()
-        logger = get_logger(__name__)
 
         logger = get_logger(
             __name__,
@@ -26,14 +29,19 @@ def main() -> None:
         )
 
         logger.info("Validation pipeline config loaded successfully")
-        logger.info(f"Run ID: {run_id}")
+        
         logger.info("Run completed successfully (placeholder)")
 
     
-    except ConfigLoadError as e:
-        logger.exception("Failed to load configuration")
+    except MLSystemError as e:
+        logger = get_logger(__name__)
+        logger.error(
+            f"pipeline failed: {e.__class__.__name__} - {str(e)}",
+            extra={"metadata": e.metadata},
+            exc_info=False,
+        )
         sys.exit(1)
 
 
-if main == "__main__":
+if __name__ == "__main__":
     main()
