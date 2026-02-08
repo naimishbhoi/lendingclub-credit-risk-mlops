@@ -38,7 +38,7 @@ format:
 	black src tests
 
 lint:
-	ruff check src tests
+	ruff check --fix src tests
 
 # =========================
 # Testing
