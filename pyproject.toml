@@ -56,13 +56,14 @@ target-version = ["py310"]
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+fix = true
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I"]
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["credit_risk_mlops", "src"]
+known-first-party = ["credit_risk_mlops"]
 
 [tool.ruff.format]
 quote-style = "double"

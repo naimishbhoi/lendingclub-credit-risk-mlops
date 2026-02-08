@@ -10,11 +10,11 @@ class MLSystemError(Exception):
     """Base class for all exception and domain-specific errors in the ML system."""
 
     def __init__(
-            self,
-            message: str,
-            *,
-            metadata: Optional[Mapping[str, Any]] = None,
-            cause: Optional[Exception] = None,
+        self,
+        message: str,
+        *,
+        metadata: Optional[Mapping[str, Any]] = None,
+        cause: Optional[Exception] = None,
     ):
         """
         Initialize the MLSystemError.
@@ -40,11 +40,14 @@ class ConfigError(MLSystemError):
 class DataError(MLSystemError):
     """Base class for all data-related failures."""
 
+
 class DataIngestionError(DataError):
     """Raised when raw data ingestion fails."""
 
+
 class DataValidationError(DataError):
     """Raised when dataset violates expected schema or quality checks."""
+
 
 class FeatureGenerationError(DataError):
     """Raised during feature engineering failures."""
@@ -56,6 +59,7 @@ class FeatureGenerationError(DataError):
 class TrainingError(MLSystemError):
     """Raised when model training fails."""
 
+
 class EvaluationError(MLSystemError):
     """Raised when model evaluation or checks fails."""
 
@@ -66,6 +70,7 @@ class EvaluationError(MLSystemError):
 class RegistryError(MLSystemError):
     """Raised when model registry operations fail."""
 
+
 class InferenceError(MLSystemError):
     """Raised during batch or online inference failures."""
 
@@ -75,6 +80,7 @@ class InferenceError(MLSystemError):
 ### ----------------------------------------
 class MonitoringError(MLSystemError):
     """Raised during monitoring or alerting failures."""
+
 
 class PipelineError(MLSystemError):
     """Raised when a pipeline orchestration step fails."""

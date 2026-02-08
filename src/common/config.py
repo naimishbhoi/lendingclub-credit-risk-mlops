@@ -43,7 +43,7 @@ def _load_yaml(file_path: Path) -> Dict[str, Any]:
             metadata={"file_path": str(file_path)},
             cause=e,
         ) from e
-    
+
     if not isinstance(data, dict):
         raise ConfigLoadError(
             f"Invalid YAML structure (expected mapping): {file_path}",
