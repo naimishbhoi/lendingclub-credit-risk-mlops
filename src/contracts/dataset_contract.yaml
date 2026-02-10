@@ -1,0 +1,70 @@
+Version: 1
+
+dataset_name: "lendingclub_loan_data"
+description: >
+  Raw LandingClub loan dataset used for credit risk modeling.
+
+
+source:
+  format: csv
+  encoding: utf-8
+
+
+primary_key: loan_id
+
+event_time:
+  column: issue_d
+  type: datetime
+  granularity: month
+  format: "%b-%Y"
+
+
+columns:
+  loan_id:
+    type: string
+    required: true
+    unique: true
+
+  issue_d:
+    type: datetime
+    required: true
+
+  loan_amnt:
+    type: float
+    required: true
+    min: 0
+
+  term:
+    type: string
+    required: true
+    min: 0
+    max: 100
+
+  grade:
+    type: string
+    required: true
+
+  sub_grade:
+    type: string
+    required: false
+
+  emp_length:
+    type: string
+    required: false
+
+  home_ownership:
+    type: string
+    required: false
+
+  annual_inc:
+    type: float
+    required: false
+    min: 0
+
+  loan_status:
+    type: string
+    required: false
+
+constraints:
+  min_rows: 1000
+  max_missing_ratio: 0.9
