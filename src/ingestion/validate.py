@@ -1,10 +1,11 @@
 """
 Module: src.ingestion.validate
-Purpose: Validate ingested LendingClub data for quality and consistency.
+Purpose: Dataset validation for ML ingestion pipelines.
 """
 
+import time
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import pandas as pd
 import yaml
@@ -12,19 +13,24 @@ import yaml
 from src.common.exceptions import DataValidationError
 from src.common.logging import get_logger
 
-
-datatypes = {
-    "string": str,
-    "float": float,
-    "integer": int,
-    "datetime": pd.Timestamp,
-    "categorical": str,
+# ---------------------------------------------------------------------
+# Supported contract data types
+# ---------------------------------------------------------------------
+SUPPORTED_TYPES = {
+    "string",
+    "float",
+    "integer",
+    "datetime",
+    "categorical",
 }
 
 
+# ---------------------------------------------------------------------
+# Contract loading
+# ---------------------------------------------------------------------
 def load_dataset_contract(contract_path: Path) -> Dict:
     """
-    Load the dataset contract from the dataset_contract.yaml file.
+    Load the dataset contract from a YAML file.
     """
     if not contract_path.exists():
         raise DataValidationError(
@@ -32,12 +38,28 @@ def load_dataset_contract(contract_path: Path) -> Dict:
         )
     
     with open(contract_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        contract =  yaml.safe_load(f)
+
+    if contract.get("version") != 1:
+        raise DataValidationError(
+            f"Unsupported contract version: {contract.get('version')}"
+        )
+    
+    required_keys = ["columns", "primary_key", "event_time"]
+    for key in required_keys:
+        if key not in contract:
+            raise DataValidationError(
+                f"Contract missing required key: '{key}'"
+            )
+        
+    return contract
     
 
+# ---------------------------------------------------------------------
+# Column-level validation helpers
+# ---------------------------------------------------------------------
 def _assert_required_columns(df: pd.DataFrame, required_columns: List[str]) -> None:
-    """Assert dataset contains all required columns."""
-
+    """Ensure all required columns are present in the DataFrame."""
     missing = sorted(set(required_columns) - set(df.columns))
     if missing:
         raise DataValidationError(
@@ -45,77 +67,110 @@ def _assert_required_columns(df: pd.DataFrame, required_columns: List[str]) -> N
             metadata={"missing_columns": missing},
         )
     
+def _validate_column_exists(df: pd.DataFrame, column: str) -> None:
+    """Check if a column exists in the DataFrame."""
+    if column not in df.columns:
+        raise DataValidationError(
+            f"Expected column '{column}' not found in dataset"
+        )
+    
 
-def _parse_datetime(series: pd.Series, fmt: str, column: str) -> pd.Series:
-    """Parse the datetime column using specified format."""
+def _validate_required_non_null(df: pd.DataFrame, column: str) -> None:
+    if df[column].isna().any():
+        raise DataValidationError(
+            f"Required column '{column}' contains null values."
+        )
+
+
+# ---------------------------------------------------------------------
+# Casting  helpers
+# ---------------------------------------------------------------------
+def _cast_column(df: pd.DataFrame, column: str, spec: Dict) -> None:
+    """Cast a single column deterministically before constraint checks."""
+    col_type = spec["type"]
 
     try:
-        return pd.to_datetime(series, format=fmt, errors="raise")
-    
+        if col_type == "datetime":
+            fmt = spec.get("format")
+            if fmt:
+                df[column] = pd.to_datetime(df[column], format=fmt, errors="raise")
+            else:
+                df[column] = pd.to_datetime(df[column], errors="raise")
+
+        elif col_type == "float":
+            df[column] = pd.to_numeric(df[column], errors="raise").astype("Float64")
+        
+        elif col_type == "integer":
+            df[column] = pd.to_numeric(df[column], errors="raise").astype("Int64")
+
+        elif col_type in {"string", "categorical"}:
+            df[column] = df[column].astype("string")
+
     except Exception as e:
         raise DataValidationError(
-            f"Failed to parse datetime column '{column}' with format '{fmt}'"
+            f"Type casting failed for column '{column}'",
+            cause=e,
         )
     
 
-def _validate_column_type(df: pd.DataFrame, column: str, spec: Dict) -> None:
-    """Validate a single column's data type and format."""
-
-    expected_type = spec.get("type")
-    
-    if expected_type not in datatypes:
-        raise DataValidationError(
-            f"Unsupported data type '{expected_type}' for column '{column}'"
-        )
-    
-    if expected_type == "datetime":
-        fmt = spec.get("format")
-        
-        if not fmt:
-            raise DataValidationError(
-                f"Missing 'format' for datetime column '{column}'"
-            )
-        df[column] = _parse_datetime(df[column], fmt, column)
-
-    elif expected_type == "float":
-        try:
-            df[column] = pd.to_numeric(df[column], errors="raise")
-        except Exception as e:
-            raise DataValidationError(
-                f"Failed to cast column '{column}' to float",
-                cause=e,
-            )
-        
-    elif expected_type == "integer":
-        try:
-            df[column] = pd.to_numeric(df[column], errors="raise").astype("int64")
-        except Exception as e:
-            raise DataValidationError(
-                f"Failed to cast column '{column}' to integer",
-                cause=e,
-            )
-        
-    # For string and categorical types, we can just ensure they are treated as strings
-        
-
+# ---------------------------------------------------------------------
+# Constraint validation helper
+# ---------------------------------------------------------------------
 def _validate_column_constraints(df: pd.DataFrame, column: str, spec: Dict) -> None:
-    """Validate column constraints as spcified in the dataset contract."""
+    """Validate column constraints as specified in the dataset contract."""
+    col_type = spec["type"]
 
-    if "min" in spec:
-        if (df[column] < spec["min"]).any():
-            raise DataValidationError(
-                f"Column '{column}' violates minimum value constraint",
-                metadata={"min": str(spec["min"])},
-            )
+    if spec.get("required", False):
+        _validate_required_non_null(df, column)
+
+    if col_type in {"float", "integer"}:
+        if "min" in spec:
+            mask = df[column].notna() & (df[column] < spec["min"])
+            if mask.any():
+                raise DataValidationError(
+                    f"Column '{column}' violates minimum value constraint",
+                    metadata={"min": spec["min"]},
+                )
+            
+        if "max" in spec:
+            mask = df[column].notna() & (df[column] > spec["max"])
+            if mask.any():
+                raise DataValidationError(
+                    f"Column '{column}' violates maximum value constraint",
+                    metadata={"max": spec["max"]},
+                )
+            
+    if col_type == "string":
+        lengths = df[column].str.len()
+
+        if "min_length" in spec:
+            mask = df[column].notna() & lengths.lt(spec["min_length"])
+            if mask.any():
+                raise DataValidationError(
+                    f"Column '{column}' violates minimum length constraint",
+                )
+
+        if "max_length" in spec:
+            mask = df[column].notna() & lengths.gt(spec["max_length"])
+            if mask.any():
+                raise DataValidationError(
+                    f"Column '{column}' violates maximum length constraint",
+                )
         
-    if "max" in spec:
-        if (df[column] > spec["max"]).any():
-            raise DataValidationError(
-                f"Column '{column}' violates maximum value constraint",
-                metadata={"max": str(spec["max"])},
-            )
+    if col_type == "categorical":
+        allowed_values = spec.get("allowed_values")
+        if allowed_values:
+            mask = df[column].notna() & ~df[column].isin(allowed_values)
+            if mask.any():
+                raise DataValidationError(
+                    f"Column '{column}' contains invalid categorical values",
+                    metadata={"allowed_values": allowed_values},
+                )
         
 
+# ---------------------------------------------------------------------
+# Main validation function
+# ---------------------------------------------------------------------
 def validate_dataset(
         csv_paths: List[Path],
         contract_path: Path,
@@ -123,68 +178,157 @@ def validate_dataset(
 ) -> pd.DataFrame:
     """
     Validate one or more raw csv files against the dataset contract.
-    Returns a concatenated, validated Dataframe.
+    Returns a concatenated, validated DataFrame.
     """
+    if not csv_paths:
+        raise DataValidationError("No CSV files provided for validation.")
 
     logger = get_logger(logger_name)
+    start_time = time.time()
 
     contract = load_dataset_contract(contract_path)
+    logger.info(f"Using dataset contract version {contract['version']}")
 
     columns_spec = contract["columns"]
     constraints = contract.get("constraints", {})
-    primary_key = contract["primary_key"]
-    event_time = contract["event_time"]["column"]
+
+    primary_key_spec = contract["primary_key"]
+    primary_key_col = primary_key_spec["column"]
+
+    event_time_spec = contract["event_time"]
+    event_time_col = event_time_spec["column"]
+
+    if event_time_col not in columns_spec:
+        raise DataValidationError(
+            f"Event time column '{event_time_col}' missing from column specification."
+        )
 
     required_cols = [
-        c for c, s in columns_spec.items() if s.get("required", False)
+        column for column, spec in columns_spec.items()
+        if spec.get("required", False)
     ]
 
     dfs: List[pd.DataFrame] = []
 
+    # -----------------------------------------------
+    # Per-file validation
+    # -----------------------------------------------
     for path in csv_paths:
         logger.info(f"Loading raw data file: {path}")
 
-        df = pd.read_csv(path)
-
+        df = pd.read_csv(path, low_memory=False)
+        
         _assert_required_columns(df, required_cols)
 
+        _validate_column_exists(df, primary_key_col)
+        _validate_column_exists(df, event_time_col)
+    
+        unexpected = set(df.columns) - set(columns_spec.keys())
+        if unexpected:
+            logger.warning(
+                f"Unexpected columns detected in {path}",
+                extra={"unexpected_columns": list(unexpected)}
+            )
+
+        if primary_key_spec.get("enforce_non_null", False):
+            if df[primary_key_col].isna().any():   # Per-file primary key non-null check
+                raise DataValidationError(
+                    f"Primary key '{primary_key_col}' contains null values in file {path}",
+                )
+   
+        if primary_key_spec.get("enforce_uniqueness", True):
+            if df[primary_key_col].duplicated().any():
+                raise DataValidationError(
+                    f"Duplicate primary keys found in file {path}",
+                )
+
+        # Casting
         for column, spec in columns_spec.items():
             if column not in df.columns:
                 continue  # Optional column missing is allowed
 
-            _validate_column_type(df, column, spec)
+            if spec["type"] not in SUPPORTED_TYPES:
+                raise DataValidationError(
+                    f"Unsupported type '{spec['type']}' for column '{column}'"
+                )
+            
+            _cast_column(df, column, spec)
+            
+
+        # semantic validation
+        for column, spec in columns_spec.items():
+            if column not in df.columns:
+                continue
+
             _validate_column_constraints(df, column, spec)
 
+            if spec.get("unique", False):
+                if df[column].duplicated().any():
+                    raise DataValidationError(
+                        f"Column '{column}' is unique but contains duplicate values in file {path}"
+                    )
+                
         dfs.append(df)
 
+    # -----------------------------------------------
+    # Concatenate validated DataFrames
+    # -----------------------------------------------
     full_df = pd.concat(dfs, ignore_index=True)
 
-    # Primary key uniqueness check
-    if full_df[primary_key].duplicated().any():
-        raise DataValidationError(
-            f"Primary key '{primary_key}' contains duplicate values"
-        )
+    # Global Primary key uniqueness check
+    if primary_key_spec.get("enforce_uniqueness", True):
+        if full_df[primary_key_col].duplicated().any():
+            raise DataValidationError(
+                f"Primary key '{primary_key_col}' contains duplicate values across files"
+            )
+        
+    # Event time non-null check
+    if event_time_spec.get("enforce_non_null", False):
+        if full_df[event_time_col].isna().any():
+            raise DataValidationError(
+                f"Event time column '{event_time_col}' contains null values"
+            )
     
-    # Dataset-level constraints
+    # Minimum row constraint
     min_rows = constraints.get("min_rows")
-    if min_rows and len(full_df) < min_rows:
+    if min_rows is not None and len(full_df) < min_rows:
         raise DataValidationError(
             f"Dataset does not meet minimum row requirement",
-            metadata={"min_rows": str(min_rows)},
+            metadata={"min_rows": min_rows},
         )
     
-    # Event time must exist and be parsable
-    if event_time not in full_df.columns:
-        raise DataValidationError(
-            f"Event time column '{event_time}' is missing from dataset"
-        )
+    # Maximum missing ratio constraint
+    max_missing_ratio = constraints.get("max_missing_ratio")
+
+    if max_missing_ratio is not None:
+        required_columns = [
+            col for col, spec in columns_spec.items()
+            if spec.get("required", False)
+        ]
+
+        if required_columns:
+            missing_ratios = full_df[required_columns].isna().mean()
+
+            if missing_ratios.max() > max_missing_ratio:
+                raise DataValidationError(
+                    "Dataset exceeds maximum missing ratio constraint",
+                    metadata={
+                        "column": missing_ratios.idxmax(),
+                        "missing_ratio": round(missing_ratios.max(), 4),
+                        "max_allowed": max_missing_ratio,
+                    },
+                )
     
+    duration = round(time.time() -start_time, 3)
+
     logger.info(
         "Dataset validation successful",
         extra={
-            "rows": str(len(full_df)),
-            "Columns": str(list(full_df.columns)),
-        }
+            "rows": len(full_df),
+            "columns": list(full_df.columns),
+            "max_missing_ratio": round(full_df.isna().mean().max(), 4),
+            "duration_seconds": duration,
+        },
     )
 
     return full_df

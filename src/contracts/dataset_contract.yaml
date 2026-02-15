@@ -1,4 +1,4 @@
-Version: 1
+version: 1
 
 dataset_name: "lendingclub_loan_data"
 description: >
@@ -10,13 +10,16 @@ source:
   encoding: utf-8
 
 
-primary_key: loan_id
+primary_key: 
+  column: loan_id
+  enforce_non_null: true
+  enforce_uniqueness: true
 
 event_time:
   column: issue_d
   type: datetime
   granularity: month
-  format: "%b-%Y"
+  enforce_non_null: true
 
 
 columns:
@@ -24,10 +27,12 @@ columns:
     type: string
     required: true
     unique: true
+    min_length: 1
 
   issue_d:
     type: datetime
     required: true
+    format: "%b-%Y"
 
   loan_amnt:
     type: float
@@ -37,8 +42,8 @@ columns:
   term:
     type: string
     required: true
-    min: 0
-    max: 100
+    min_length: 0
+    max_length: 100
 
   grade:
     type: string
