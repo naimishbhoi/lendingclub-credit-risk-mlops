@@ -1,3 +1,7 @@
 raw_data_path: data/raw
 processed_data_path: data/processed
-label_window_days: 30
+interim_data_path: data/interim
+
+dataset_contract_path: src/contracts/dataset_contract.yaml
+
+label_window_days: 180
