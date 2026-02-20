@@ -8,7 +8,6 @@ import time
 import hashlib
 import shutil
 from pathlib import Path
-from typing import List
 from uuid import uuid4
 
 import pandas as pd
@@ -17,36 +16,11 @@ from src.common.cli import build_base_parser
 from src.common.config import load_app_config, save_config_snapshot
 from src.common.logging import get_logger, set_run_id
 from src.common.exceptions import MLSystemError, PipelineError
-from src.ingestion.validate import validate_dataset, load_dataset_contract
 
+from src.ingestion.ingest import discover_raw_csvs, load_raw_csv_files
+from src.ingestion.validate import validate_dataframe
+from src.contracts.loader import load_dataset_contract
 
-# ----------------------------------------------------------------------
-# Discovery
-# ----------------------------------------------------------------------
-def _discover_raw_csvs(raw_dir: Path) -> List[Path]:
-    """Discover CSV files in raw data directory."""
-    if not raw_dir.exists():
-        raise PipelineError(
-            "Raw data directory does not exist.",
-            metadata={"raw_dir": str(raw_dir)},
-        )
-    
-    if not raw_dir.is_dir():
-        raise PipelineError(
-            "Raw data path is not a directory.",
-            metadata={"raw_dir": str(raw_dir)},
-        )
-    
-    csv_files = sorted(raw_dir.glob("*.csv"))
-
-    if not csv_files:
-        raise PipelineError(
-            "No CSV files found in raw directory.",
-            metadata={"raw_dir": str(raw_dir)},
-        )
-    
-    return csv_files
-    
 
 # ----------------------------------------------------------------------
 # Persist Interim Data
@@ -78,7 +52,10 @@ def _persist_interim_data(
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Deterministic ordering
     df_sorted = df.sort_values(by=primary_key).reset_index(drop=True)
+    
     output_path = output_dir / f"validated_dataset_{run_id}.parquet"
     tmp_path = output_path.with_suffix(".tmp")
     
@@ -128,8 +105,8 @@ def run_validation_pipeline(config, run_id: str) -> Path:
     raw_dir = Path(config.data.raw_data_path).resolve()
     contract_path = Path(config.data.dataset_contract_path).resolve()
     artifacts_root = Path(config.paths.artifacts_root).resolve()
-    
     interim_root = Path(config.data.interim_data_path).resolve()
+
     interim_dir = interim_root / run_id
     interim_dir.mkdir(parents=True, exist_ok=True)
 
@@ -172,38 +149,57 @@ def run_validation_pipeline(config, run_id: str) -> Path:
     # Discover Files
     # ---------------------------------------
     discover_start = time.time()
-    csv_files = _discover_raw_csvs(raw_dir)
+    csv_files = discover_raw_csvs(raw_dir)
     discover_duration = round(time.time() - discover_start, 3)
 
     total_input_size_mb = round(
         sum(p.stat().st_size for p in csv_files) / (1024 ** 2), 3
     )
 
+    hasher = hashlib.sha256()
+    for p in csv_files:
+        with open(p, "rb")as f:
+            while chunk := f.read(8192):
+                hasher.update(chunk)
+
+    raw_data_hash = hasher.hexdigest()
+
     logger.info(
         "Discovered raw CSV files",
         extra={
             "file_count": len(csv_files),
             "total_size_mb": total_input_size_mb,
+            "raw_data_hash": raw_data_hash,
             "duration_seconds": discover_duration,
         },
+    )
+
+    # ---------------------------------------
+    # Load Raw Data
+    # ---------------------------------------
+    ingestion_start = time.time()
+    raw_df = load_raw_csv_files(csv_paths=csv_files)
+    ingestion_duration = round(time.time() - ingestion_start, 3)
+
+    logger.info(
+        "Raw data loaded successfully.",
+        extra={
+            "row_count": len(raw_df),
+            "column_count": len(raw_df.columns),
+            "duration_seconds": ingestion_duration,
+        }
     )
 
     # ---------------------------------------
     # Validate Dataset
     # ---------------------------------------
     validation_start = time.time()
-    validated_df = validate_dataset(
-        csv_paths=csv_files,
-        contract_path=contract_path,
+    validated_df = validate_dataframe(
+        df=raw_df,
+        contract=contract,
         logger_name="data_validation",
     )
     validation_duration = round(time.time() - validation_start, 3)
-
-    if not isinstance(validated_df, pd.DataFrame):
-        raise PipelineError(
-            "Validated output is not a DataFrame.",
-            metadata={"output_type": type(validated_df)},
-        )
 
     logger.info(
         "Dataset validation complete.",
