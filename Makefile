@@ -11,7 +11,7 @@ TEST_DIR := tests
 # =========================
 # Help
 # =========================
-.PHONY: help install install-dev format lint test check clean precommit
+.PHONY: help install install-dev format lint test check clean precommit validate download
 help:
 	@echo "Available commands:"
 	@echo "  make install        - Install project core dependencies"
@@ -20,6 +20,8 @@ help:
 	@echo "  make lint           - Lint code with ruff"
 	@echo "  make test           - Run tests with pytest"
 	@echo "  make check          - Run format, lint, and tests"
+	@echo "  make validate       - Run validation pipeline"
+	@echo "  make download       - Download datasets"
 	@echo "  make clean          - Clean up build artifacts and caches"
 
 # =========================
@@ -64,3 +66,15 @@ clean:
 # =========================
 precommit: format lint test
 	@echo "Pre-commit checks passed."
+
+# =========================
+# Pipelines
+# =========================
+validate:
+	$(PYTHON) -m pipelines.validate_pipeline --config-dir config
+
+# =========================
+# Download Datasets
+# =========================
+download:
+	$(PYTHON) scripts/download_datasets.py
