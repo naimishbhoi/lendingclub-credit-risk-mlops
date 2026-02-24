@@ -7,6 +7,7 @@ PIP := $(PYTHON) -m pip
 
 SRC_DIR := src
 TEST_DIR := tests
+CONFIG_DIR := configs
 
 # =========================
 # Help
@@ -71,10 +72,10 @@ precommit: format lint test
 # Pipelines
 # =========================
 validate:
-	$(PYTHON) -m pipelines.validate_pipeline --config-dir config
+	$(PYTHON) -m pipelines.validate_pipeline --config-dir $(CONFIG_DIR)
 
 # =========================
 # Download Datasets
 # =========================
 download:
-	$(PYTHON) scripts/download_datasets.py
+	$(PYTHON) -m scripts.download_datasets --config-dir $(CONFIG_DIR)
