@@ -1,3 +1,6 @@
+# ----------------------------------------------------------------------
+# Data Paths
+# ----------------------------------------------------------------------
 raw_data_path: data/raw
 processed_data_path: data/processed
 interim_data_path: data/interim
@@ -5,3 +8,12 @@ interim_data_path: data/interim
 dataset_contract_path: src/contracts/dataset_contract.yaml
 
 label_window_days: 180
+
+
+# ----------------------------------------------------------------------
+# External Dataset Source
+# ----------------------------------------------------------------------
+dataset_source:
+  provider: kaggle
+  dataset_slug: wordsforthewise/lending-club
+  dataset_version: null

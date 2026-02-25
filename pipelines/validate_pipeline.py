@@ -29,7 +29,7 @@ def _persist_interim_data(
     df: pd.DataFrame,
     output_dir: Path,
     run_id: str,
-    primary_key:str,
+    primary_key: str,
     logger,
 ) -> Path:
     """Persist validated dataset to parquet."""
@@ -41,7 +41,7 @@ def _persist_interim_data(
             "Validated dataframe is empty.",
             metadata={"row_count": 0},
         )
-    
+
     if primary_key not in df.columns:
         raise PipelineError(
             "Primary key missing in dataframe.",
@@ -55,16 +55,16 @@ def _persist_interim_data(
 
     # Deterministic ordering
     df_sorted = df.sort_values(by=primary_key).reset_index(drop=True)
-    
+
     output_path = output_dir / f"validated_dataset_{run_id}.parquet"
     tmp_path = output_path.with_suffix(".tmp")
-    
+
     if output_path.exists():
         raise PipelineError(
             "Output artifact already exists.",
             metadata={"output_path": str(output_path)},
         )
-    
+
     try:
         df_sorted.to_parquet(tmp_path, index=False, engine="pyarrow")
         tmp_path.replace(output_path)
@@ -77,7 +77,7 @@ def _persist_interim_data(
             "Failed to persist parquet artifact.",
             metadata={"output_path": str(output_path)},
         ) from e
-    
+
     artifact_size_mb = round(output_path.stat().st_size / (1024 ** 2), 3)
 
     logger.info(
@@ -87,7 +87,7 @@ def _persist_interim_data(
             "artifact_size_mb": artifact_size_mb,
         },
     )
-    
+
     return output_path
 
 
@@ -115,7 +115,7 @@ def run_validation_pipeline(config, run_id: str) -> Path:
             "Dataset contract file does not exist.",
             metadata={"contract_path": str(contract_path)},
         )
-    
+
     contract = load_dataset_contract(contract_path)
 
     contract_version = contract.get("version")
@@ -130,7 +130,7 @@ def run_validation_pipeline(config, run_id: str) -> Path:
                 "contract_keys": list(contract.keys()),
             },
         )
-        
+
     contract_bytes = contract_path.read_bytes()
     contract_hash = hashlib.sha256(contract_bytes).hexdigest()
 
@@ -158,10 +158,10 @@ def run_validation_pipeline(config, run_id: str) -> Path:
 
     hasher = hashlib.sha256()
     for p in csv_files:
-        with open(p, "rb")as f:
+        with open(p, "rb") as f:
             while chunk := f.read(8192):
                 hasher.update(chunk)
-
+                
     raw_data_hash = hasher.hexdigest()
 
     logger.info(
@@ -260,7 +260,7 @@ def main() -> None:
     """CLI entrypoint for dataset validation pipeline."""
     parser = build_base_parser("Dataset & Schema Validation Pipeline")
     args = parser.parse_args()
-    
+
     run_id = set_run_id(str(uuid4()))
     logger = get_logger(__name__)
 
@@ -274,8 +274,8 @@ def main() -> None:
             "Pipeline failed with controlled system exception.",
             extra={
                 "error_type": e.__class__.__name__,
-                "message": str(e),
-                "metadata": getattr(e, "metadata", {})
+                "error_message": str(e),
+                "metadata": getattr(e, "metadata", {}),
             },
             exc_info=True,
         )
