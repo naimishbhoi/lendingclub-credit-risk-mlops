@@ -211,3 +211,6 @@ __marimo__/
 kaggle.json
 **/kaggle.json
 .kaggle/
+
+# Raw data (reproducible via make download)
+data/raw/
