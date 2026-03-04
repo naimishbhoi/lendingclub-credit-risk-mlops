@@ -213,4 +213,15 @@ kaggle.json
 .kaggle/
 
 # Raw data (reproducible via make download)
-data/raw/
+data/raw/*
+!data/raw/.gitkeep
+
+# Runtime artifacts
+artifacts/*
+!artifacts/.gitkeep
+
+data/interim/*
+!data/interim/.gitkeep
+
+# Temporary pipeline files
+*.tmp
