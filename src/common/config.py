@@ -128,6 +128,20 @@ def load_app_config(config_dir: str) -> AppConfig:
         ) from e
 
 
+def _serialize_for_yaml(obj):
+    """Convert a Pydantic object to a dictionary for YAML serialization."""
+    if isinstance(obj, Path):
+        return str(obj)
+
+    if isinstance(obj, dict):
+        return {k: _serialize_for_yaml(v) for k, v in obj.items()}
+
+    if isinstance(obj, list):
+        return [_serialize_for_yaml(v) for v in obj]
+
+    return obj
+
+
 def save_config_snapshot(config: AppConfig, output_dir: str) -> None:
     """Save a snapshot of the current configuration to a YAML file."""
 
@@ -135,6 +149,7 @@ def save_config_snapshot(config: AppConfig, output_dir: str) -> None:
     output_path.mkdir(parents=True, exist_ok=True)
 
     config_dict = config.model_dump()
+    config_dict = _serialize_for_yaml(config_dict)
 
     snapshot_file = output_path / "config_snapshot.yaml"
     with open(snapshot_file, "w", encoding="utf-8") as file:

@@ -1,33 +1,50 @@
-version: 1
+version: 2
 
 dataset_name: "lendingclub_loan_data"
 description: >
   Raw LandingClub loan dataset used for credit risk modeling.
 
-
+# -----------------------------------------------------
+# Sorce Metadata
+# -----------------------------------------------------
 source:
   format: csv
   encoding: utf-8
+  compression: gzip
 
 
+# -----------------------------------------------------
+# Primary Key
+# -----------------------------------------------------
 primary_key: 
-  column: loan_id
+  column: id
   enforce_non_null: true
   enforce_uniqueness: true
 
+
+# -----------------------------------------------------
+# Event Time (used for drift analysis) & Labelling
+# -----------------------------------------------------
 event_time:
   column: issue_d
   type: datetime
   granularity: month
   enforce_non_null: true
 
+label:
+  column: loan_status
+  required: true
 
+
+# -----------------------------------------------------
+# Column Definitions
+# -----------------------------------------------------
 columns:
-  loan_id:
-    type: string
+  id:
+    type: integer
     required: true
     unique: true
-    min_length: 1
+    min: 1
 
   issue_d:
     type: datetime
@@ -37,39 +54,90 @@ columns:
   loan_amnt:
     type: float
     required: true
-    min: 0
+    min: 500
+    max: 100000
 
   term:
-    type: string
+    type: categorical
     required: true
-    min_length: 0
-    max_length: 100
+    allowed_values:
+      - "36 months"
+      - "60 months"
 
   grade:
-    type: string
+    type: categorical
     required: true
+    allowed_values:
+      - "A"
+      - "B"
+      - "C"
+      - "D"
+      - "E"
+      - "F"
+      - "G"
 
   sub_grade:
     type: string
-    required: false
+    required: true
+    min_length: 1
+    max_length: 3
 
   emp_length:
-    type: string
+    type: categorical
     required: false
+    allowed_values:
+      - "< 1 year"
+      - "1 year"
+      - "2 years"
+      - "3 years"
+      - "4 years"
+      - "5 years"
+      - "6 years"
+      - "7 years"
+      - "8 years"
+      - "9 years"
+      - "10+ years"
 
   home_ownership:
-    type: string
-    required: false
+    type: categorical
+    required: true
+    allowed_values:
+      - "RENT"
+      - "OWN"
+      - "MORTGAGE"
+      - "OTHER"
+      - "NONE"
+      - "ANY"
 
   annual_inc:
     type: float
-    required: false
+    required: true
+    enforce_non_null: false
     min: 0
 
-  loan_status:
-    type: string
-    required: false
+  dti:
+    type: float
+    required: true
+    min: 0
+    max: 200
 
+  verification_status:
+    type: categorical
+    required: true
+    allowed_values:
+      - "Verified"
+      - "Source Verified"
+      - "Not Verified"
+
+  loan_status:
+    type: categorical
+    required: true
+
+
+# -----------------------------------------------------
+# Dataset-level Constraints
+# -----------------------------------------------------
 constraints:
-  min_rows: 1000
-  max_missing_ratio: 0.9
+  min_rows: 100000
+  max_missing_ratio: 0.75
+  enforce_strict_column_set: false

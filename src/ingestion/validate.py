@@ -48,6 +48,66 @@ def _validate_required_non_null(df: pd.DataFrame, column: str) -> None:
 
 
 # ---------------------------------------------------------------------
+# Schema Alignment Diagnostics
+# ---------------------------------------------------------------------
+def _log_schema_alignment(
+    df: pd.DataFrame,
+    columns_spec: Dict,
+    logger,
+    enforce_strict: bool = False,
+) -> None:
+    """Log schema alignment diagnostics and optionally fail on unexpected columns."""
+    contract_cols = set(columns_spec.keys())
+    data_cols = set(df.columns)
+
+    missing_in_data = sorted(contract_cols - data_cols)
+    unexpected_in_data = sorted(data_cols - contract_cols)
+
+    logger.info(
+        "Schema alignment check",
+        extra={
+            "contract_column_count": len(contract_cols),
+            "data_column_count": len(data_cols),
+            "missing_in_data": missing_in_data,
+            "unexpected_in_data": unexpected_in_data,
+        },
+    )
+
+    if enforce_strict and unexpected_in_data:
+        raise DataValidationError(
+            "Unexpected columns detected in dataset.",
+            metadata={"unexpected_columns": unexpected_in_data},
+        )
+
+
+# ---------------------------------------------------------------------
+# Canonicalization Layer
+# ---------------------------------------------------------------------
+def _canonicalize_numeric_domains(df: pd.DataFrame, logger) -> None:
+    """
+    Clean known invalid numeric values before constraint checks.
+    Dataset-specific canonicalization logic.
+    """
+    # ---- DTI cleaning ----
+    if "dti" in df.columns:
+        dti = df["dti"]
+
+        invalid_mask = dti.notna() & ((dti < 0) | (dti == 999) | (dti > 200))
+
+        invalid_count = int(invalid_mask.sum())
+        if invalid_count > 0:
+            logger.info(
+                "Canonicalizing invalid dti values to NA.",
+                extra={
+                    "column": "dti",
+                    "invalid_count": invalid_count,
+                },
+            )
+
+            df.loc[invalid_mask, "dti"] = pd.NA
+
+
+# ---------------------------------------------------------------------
 # Casting  helpers
 # ---------------------------------------------------------------------
 def _cast_column(df: pd.DataFrame, column: str, spec: Dict) -> None:
@@ -69,7 +129,7 @@ def _cast_column(df: pd.DataFrame, column: str, spec: Dict) -> None:
             df[column] = pd.to_numeric(df[column], errors="raise").astype("Int64")
 
         elif col_type in {"string", "categorical"}:
-            df[column] = df[column].astype("string")
+            df[column] = df[column].astype("string").str.strip()
 
     except Exception as e:
         raise DataValidationError(
@@ -84,7 +144,7 @@ def _validate_column_constraints(df: pd.DataFrame, column: str, spec: Dict) -> N
     """Validate column constraints as specified in the dataset contract."""
     col_type = spec["type"]
 
-    if spec.get("required", False):
+    if spec.get("enforce_non_null", False):
         _validate_required_non_null(df, column)
 
     if col_type in {"float", "integer"}:
@@ -166,31 +226,55 @@ def validate_dataframe(
     event_time_spec = contract["event_time"]
     event_time_col = event_time_spec["column"]
 
+    label_spec = contract.get("label")
+    label_col = label_spec["column"] if label_spec else None
+
+    if primary_key_col not in columns_spec:
+        raise DataValidationError(
+            f"Primary key column '{primary_key_col}' missing from column specification."
+        )
+
     if event_time_col not in columns_spec:
         raise DataValidationError(
             f"Event time column '{event_time_col}' missing from column specification."
         )
 
+    if label_spec and label_col not in columns_spec:
+        raise DataValidationError(
+            f"Label column '{label_col}' missing from column specification."
+        )
+
+    # ------------------------------
+    # Schema alignment check
+    # ------------------------------
+    _log_schema_alignment(
+        df=df,
+        columns_spec=columns_spec,
+        logger=logger,
+        enforce_strict=constraints.get("enforce_strict_column_set", False),
+    )
+
+    # ------------------------------
+    # Required column check
+    # ------------------------------
     required_cols = [
         column for column, spec in columns_spec.items() if spec.get("required", False)
     ]
 
-    # Required column check
     _assert_required_columns(df, required_cols)
 
+    # ------------------------------
     # Existence checks
+    # ------------------------------
     _validate_column_exists(df, primary_key_col)
     _validate_column_exists(df, event_time_col)
 
-    # Log unexpected columns
-    unexpected = set(df.columns) - set(columns_spec.keys())
-    if unexpected:
-        logger.warning(
-            "Unexpected columns detected in dataset.",
-            extra={"unexpected_columns": list(unexpected)},
-        )
+    if label_spec:
+        _validate_column_exists(df, label_col)
 
+    # ------------------------------
     # Primary key checks
+    # ------------------------------
     if primary_key_spec.get("enforce_non_null", False):
         if df[primary_key_col].isna().any():
             raise DataValidationError(
@@ -203,7 +287,9 @@ def validate_dataframe(
                 f"Primary keys '{primary_key_col}' contains duplicate values.",
             )
 
+    # ------------------------------
     # Casting
+    # ------------------------------
     for column, spec in columns_spec.items():
         if column not in df.columns:
             continue  # Optional column missing is allowed
@@ -215,7 +301,12 @@ def validate_dataframe(
 
         _cast_column(df, column, spec)
 
-    # Constraint validation
+    # Canonicalization check
+    _canonicalize_numeric_domains(df, logger)
+
+    # ------------------------------
+    # Column constraint validation
+    # ------------------------------
     for column, spec in columns_spec.items():
         if column not in df.columns:
             continue
@@ -228,14 +319,56 @@ def validate_dataframe(
                     f"Column '{column}' is unique but contains duplicate values."
                 )
 
+    # ------------------------------
+    # Label validation
+    # ------------------------------
+    if label_spec:
+        if label_spec.get("required", False):
+            _validate_required_non_null(df, label_col)
+
+        allowed_values = label_spec.get("allowed_values")
+        if allowed_values:
+            mask = df[label_col].notna() & ~df[label_col].isin(allowed_values)
+
+            if mask.any():
+                raise DataValidationError(
+                    f"Label column '{label_col}' contains invalid values.",
+                    metadata={"allowed_values": allowed_values},
+                )
+
+        if df[label_col].nunique(dropna=True) < 2:
+            raise DataValidationError(
+                f"Label column '{label_col}' insufficient unique values."
+            )
+
+    # ------------------------------
     # Event time non-null check
+    # ------------------------------
     if event_time_spec.get("enforce_non_null", False):
         if df[event_time_col].isna().any():
             raise DataValidationError(
                 f"Event time column '{event_time_col}' contains null values"
             )
 
+    # ------------------------------
+    # Event time granularity check
+    # ------------------------------
+    granularity = event_time_spec.get("granularity")
+    if granularity:
+        if not pd.api.types.is_datetime64_dtype(df[event_time_col]):
+            raise DataValidationError(
+                f"Event time column '{event_time_col}' must be datetime type."
+            )
+
+        if granularity == "month":
+            if not (df[event_time_col].dt.day == 1).all():
+                raise DataValidationError(
+                    f"Event time column '{event_time_col}' is not monthly granularity."
+                )
+
+    # ------------------------------
     # Minimum row constraint
+    # ------------------------------
     min_rows = constraints.get("min_rows")
     if min_rows is not None and len(df) < min_rows:
         raise DataValidationError(
@@ -243,7 +376,9 @@ def validate_dataframe(
             metadata={"min_rows": min_rows},
         )
 
+    # -----------------------------------
     # Maximum missing ratio constraint
+    # -----------------------------------
     max_missing_ratio = constraints.get("max_missing_ratio")
 
     if max_missing_ratio is not None and required_cols:

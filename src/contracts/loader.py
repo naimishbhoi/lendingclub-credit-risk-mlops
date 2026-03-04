@@ -10,6 +10,10 @@ import yaml
 
 from src.common.exceptions import DataValidationError
 
+# ---------------------------------------------------------------------
+# Supported Contract Versionsand Datatype
+# ---------------------------------------------------------------------
+SUPPORTED_CONTRACT_VERSIONS = {1, 2}
 supported_types = {"string", "float", "integer", "datetime", "categorical"}
 
 
@@ -48,6 +52,9 @@ def _validate_contract_schema(contract: Dict) -> None:
         )
 
 
+# ---------------------------------------------------------------------
+# Contract Loader
+# ---------------------------------------------------------------------
 def load_dataset_contract(contract_path: Path) -> Dict:
     """
     Load and validate dataset contract for YAML file.
@@ -65,7 +72,7 @@ def load_dataset_contract(contract_path: Path) -> Dict:
             metadata={"contract_path": str(contract_path)},
         ) from e
 
-    if contract.get("version") != 1:
+    if contract.get("version") not in SUPPORTED_CONTRACT_VERSIONS:
         raise DataValidationError(
             f"Unsupported contract version: {contract.get('version')}"
         )
