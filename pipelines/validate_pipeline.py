@@ -3,10 +3,10 @@ Module: pipelines.validate_pipeline
 Purpose: Orchestrate the dataset and schema validation pipeline.
 """
 
-import sys
-import time
 import hashlib
 import shutil
+import sys
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,12 +14,11 @@ import pandas as pd
 
 from src.common.cli import build_base_parser
 from src.common.config import load_app_config, save_config_snapshot
-from src.common.logging import get_logger, set_run_id
 from src.common.exceptions import MLSystemError, PipelineError
-
+from src.common.logging import get_logger, set_run_id
+from src.contracts.loader import load_dataset_contract
 from src.ingestion.ingest import discover_raw_csvs, load_raw_csv_files
 from src.ingestion.validate import validate_dataframe
-from src.contracts.loader import load_dataset_contract
 
 
 # ----------------------------------------------------------------------
@@ -48,7 +47,7 @@ def _persist_interim_data(
             metadata={
                 "primary_key": primary_key,
                 "columns": list(df.columns),
-            }
+            },
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -78,7 +77,7 @@ def _persist_interim_data(
             metadata={"output_path": str(output_path)},
         ) from e
 
-    artifact_size_mb = round(output_path.stat().st_size / (1024 ** 2), 3)
+    artifact_size_mb = round(output_path.stat().st_size / (1024**2), 3)
 
     logger.info(
         "Interim artifact written successfully.",
@@ -152,16 +151,14 @@ def run_validation_pipeline(config, run_id: str) -> Path:
     csv_files = discover_raw_csvs(raw_dir)
     discover_duration = round(time.time() - discover_start, 3)
 
-    total_input_size_mb = round(
-        sum(p.stat().st_size for p in csv_files) / (1024 ** 2), 3
-    )
+    total_input_size_mb = round(sum(p.stat().st_size for p in csv_files) / (1024**2), 3)
 
     hasher = hashlib.sha256()
     for p in csv_files:
         with open(p, "rb") as f:
             while chunk := f.read(8192):
                 hasher.update(chunk)
-                
+
     raw_data_hash = hasher.hexdigest()
 
     logger.info(
@@ -187,7 +184,7 @@ def run_validation_pipeline(config, run_id: str) -> Path:
             "row_count": len(raw_df),
             "column_count": len(raw_df.columns),
             "duration_seconds": ingestion_duration,
-        }
+        },
     )
 
     # ---------------------------------------
@@ -227,8 +224,8 @@ def run_validation_pipeline(config, run_id: str) -> Path:
         "Persistence complete.",
         extra={
             "interim_path": str(artifact_path),
-            "duration_seconds": persistence_duration
-        }
+            "duration_seconds": persistence_duration,
+        },
     )
 
     # ---------------------------------------
@@ -247,7 +244,7 @@ def run_validation_pipeline(config, run_id: str) -> Path:
         extra={
             "run_id": run_id,
             "total_duration_seconds": total_duration,
-        }
+        },
     )
 
     return artifact_path

@@ -16,7 +16,7 @@ source:
 # -----------------------------------------------------
 # Primary Key
 # -----------------------------------------------------
-primary_key: 
+primary_key:
   column: id
   enforce_non_null: true
   enforce_uniqueness: true

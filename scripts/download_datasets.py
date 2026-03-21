@@ -2,19 +2,19 @@
 Module: scripts.download_data
 Purpose: Download LendingClub dataset via Kaggle API into data/raw.
 """
+
 from __future__ import annotations
 
 import os
-import sys
 import shutil
 import subprocess
-
+import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
-from dataclasses import dataclass
 
-from src.common.logging import get_logger
 from src.common.config import load_app_config
+from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -47,8 +47,10 @@ class DownloadError(RuntimeError):
 def _has_env_auth() -> bool:
     return bool(os.getenv("KAGGLE_USERNAME") and os.getenv("KAGGLE_KEY"))
 
+
 def _has_file_auth() -> bool:
     return (Path.home() / ".kaggle" / "kaggle.json").exists()
+
 
 def validate_environment(config: DownloadConfig) -> None:
     """
@@ -114,6 +116,7 @@ def build_download_command(config: DownloadConfig) -> List[str]:
         command.extend(["--version", config.dataset_version])
 
     return command
+
 
 def download_dataset(config: DownloadConfig) -> None:
     command = build_download_command(config)
