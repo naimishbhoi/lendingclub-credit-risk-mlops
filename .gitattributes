@@ -1,0 +1,45 @@
+# ---------------------------
+# Global normalization
+# ---------------------------
+* text=auto eol=lf
+
+# ---------------------------
+# Source code
+# ---------------------------
+*.py text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+
+# ---------------------------
+# Config / data formats
+# ---------------------------
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.csv text eol=lf
+
+# ---------------------------
+# Notebooks
+# ---------------------------
+*.ipynb text eol=lf
+*.ipynb filter=nbstripout
+
+# ---------------------------
+# Windows scripts
+# ---------------------------
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# ---------------------------
+# Binary files
+# ---------------------------
+*.pkl binary
+*.joblib binary
+*.parquet binary
+*.feather binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
