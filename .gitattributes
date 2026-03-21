@@ -22,8 +22,7 @@
 # ---------------------------
 # Notebooks
 # ---------------------------
-*.ipynb text eol=lf
-*.ipynb filter=nbstripout
+*.ipynb text eol=lf filter=nbstripout diff=ipynb
 
 # ---------------------------
 # Windows scripts
@@ -32,14 +31,19 @@
 *.cmd text eol=crlf
 
 # ---------------------------
-# Binary files
+# Binary files (ML artifacts)
 # ---------------------------
-*.pkl binary
-*.joblib binary
-*.parquet binary
-*.feather binary
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.gif binary
-*.pdf binary
+*.pkl -text -diff
+*.joblib -text -diff
+*.parquet -text -diff
+*.feather -text -diff
+*.h5 -text -diff
+*.onnx -text -diff
+*.pt -text -diff
+
+# Images / docs
+*.png -text -diff
+*.jpg -text -diff
+*.jpeg -text -diff
+*.gif -text -diff
+*.pdf -text -diff
