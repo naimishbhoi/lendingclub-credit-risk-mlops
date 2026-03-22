@@ -18,15 +18,16 @@ repos:
     rev: 24.8.0
     hooks:
       - id: black
-        language_version: python3.11
+        language_version: python3.10
 
   # ---------------------------
-  # Import sorting
+  # Ruff (lint + import sorting)
   # ---------------------------
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.0
     hooks:
-      - id: isort
+      - id: ruff
+        args: ["--fix"]
 
   # ---------------------------
   # Notebook output stripping

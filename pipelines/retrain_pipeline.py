@@ -7,7 +7,7 @@ import sys
 
 from src.common.cli import build_base_parser
 from src.common.config import load_app_config
-from src.common.exceptions import MLSystemError, PipelineError
+from src.common.exceptions import MLSystemError
 from src.common.logging import get_logger, set_run_id
 
 
@@ -16,11 +16,9 @@ def main() -> None:
     parser = build_base_parser("Retraining pipeline")
     args = parser.parse_args()
 
-    run_id = set_run_id()
-    logger = get_logger(__name__)
-
     try:
         config = load_app_config(args.config_dir)
+        run_id = set_run_id()
 
         logger = get_logger(
             __name__,
@@ -29,6 +27,7 @@ def main() -> None:
             log_dir=config.logging.log_dir,
         )
 
+        logger.info(f"Retraining pipeline started | run_id: {run_id}")
         logger.info("Retraining pipeline config loaded successfully")
 
         logger.info("Run completed successfully (placeholder)")
