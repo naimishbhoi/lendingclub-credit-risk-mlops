@@ -42,6 +42,7 @@ jobs:
 
       - name: Run quality checks
         run: make check
+        shell: bash
 
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1
