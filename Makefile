@@ -9,6 +9,8 @@ SRC_DIR := src
 TEST_DIR := tests
 CONFIG_DIR := configs
 
+SHELL := /bin/bash
+.ONESHELL:
 .SHELLFLAGS := -eu -o pipefail -c
 
 # =========================
