@@ -1,0 +1,69 @@
+version: 1
+
+pipeline:
+
+  # ------------------------------------------------------
+  # STEP 1 - Column Filtering
+  # ------------------------------------------------------
+  - name: select_eligible_features
+    type: column_selector
+
+  # ------------------------------------------------------
+  # STEP 2 - Dtype Enforcement (CRITICAL)
+  # ------------------------------------------------------
+  - name: dtype_enforcer
+    type: dtype_enforcer
+
+  # ------------------------------------------------------
+  # STEP 3 - Temporal Feature Engineering
+  # ------------------------------------------------------
+  - name: credit_history_length
+    type: datetime_diff
+    start_column: earliest_cr_line
+    end_column: issue_year
+    output_column: credit_history_length_years
+
+  # ------------------------------------------------------
+  # STEP 4 - Numerical Imputation
+  # ------------------------------------------------------
+  - name: numerical_imputer
+    type: numerical_imputer
+    strategy: median
+
+  # ------------------------------------------------------
+  # STEP 5 - Log Transform
+  # ------------------------------------------------------
+  - name: log_transformer
+    type: log_transformer
+    columns:
+      - loan_amnt
+      - annual_inc
+      - revol_bal
+      - total_bal_ex_mort
+
+  # ------------------------------------------------------
+  # STEP 6 - Frequency Encoding (High Cardinality)
+  # ------------------------------------------------------
+  - name: frequency_encoder
+    type: frequency_encoder
+    columns:
+      - addr_state
+      - purpose
+
+  # ------------------------------------------------------
+  # STEP 7 - One Hot Encoding (Low Cardinality)
+  # ------------------------------------------------------
+  - name: one_hot_encoder
+    type: one_hot_encoder
+    exclude_columns:
+      - addr_state
+      - purpose
+    max_cardinality: 20
+
+  # ------------------------------------------------------
+  # STEP 8 - Drop Raw Columns
+  # ------------------------------------------------------
+  - name: drop_unused
+    type: column_dropper
+    drop_original_categorical: true
+    drop_datetime: true

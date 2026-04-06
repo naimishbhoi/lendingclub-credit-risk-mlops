@@ -1,6 +1,275 @@
 version: 1
 
-inputs:
-  source: artifacts/eligible_features.csv
+feature_set_name: "lendingclub_eligible_features_pipeline"
+description: >
+  Contract defining input exceptions and output feature schema
+  for the pipeline that generates the eligible features for the LendingClub dataset.
 
-outputs: []
+# -----------------------------------------------------
+# INPUT CONTRACT
+# -----------------------------------------------------
+inputs:
+  source: artifacts\features\eligible_features.csv
+
+  enforce_strict_column_set: true
+
+  columns:
+    # -----------------------------------------------------
+    # NUMERICAL
+    # -----------------------------------------------------
+    loan_amnt:
+      dtype: float
+      nullable: false
+
+    int_rate:
+      dtype: float
+      nullable: false
+
+    annual_inc:
+      dtype: float
+      nullable: true
+
+    dti:
+      dtype: float
+      nullable: false
+
+    revol_bal:
+      dtype: float
+      nullable: false
+
+    revol_util:
+      dtype: float
+      nullable: true
+
+    total_acc:
+      dtype: float
+      nullable: false
+
+    tot_cur_bal:
+      dtype: float
+      nullable: true
+
+    total_rev_hi_lim:
+      dtype: float
+      nullable: true
+
+    bc_open_to_buy:
+      dtype: float
+      nullable: true
+
+    bc_util:
+      dtype: float
+      nullable: true
+
+    total_bal_ex_mort:
+      dtype: float
+      nullable: true
+
+    total_bc_limit:
+      dtype: float
+      nullable: true
+
+    fico_score:
+      dtype: float
+      nullable: false
+      derived_from:
+        - fico_range_low
+        - fico_range_high
+
+    # -----------------------------------------------------
+    # COUNT/DISCRETE
+    # -----------------------------------------------------
+    delinq_2yrs:
+      dtype: int
+      nullable: false
+
+    inq_last_6mths:
+      dtype: int
+      nullable: false
+
+    open_acc:
+      dtype: int
+      nullable: false
+
+    pub_rec:
+      dtype: int
+      nullable: false
+
+    acc_open_past_24mths:
+      dtype: int
+      nullable: true
+
+    mort_acc:
+      dtype: int
+      nullable: true
+
+    num_actv_bc_tl:
+      dtype: int
+      nullable: true
+
+    num_actv_rev_tl:
+      dtype: int
+      nullable: true
+
+    num_bc_tl:
+      dtype: int
+      nullable: true
+
+    pub_rec_bankruptcies:
+      dtype: int
+      nullable: true
+
+    # -----------------------------------------------------
+    # CATEGORICAL
+    # -----------------------------------------------------
+    term:
+      dtype: categorical
+      nullable: false
+
+    emp_length:
+      dtype: categorical
+      nullable: true
+
+    home_ownership:
+      dtype: categorical
+      nullable: false
+
+    verification_status:
+      dtype: categorical
+      nullable: false
+
+    purpose:
+      dtype: categorical
+      nullable: false
+
+    addr_state:
+      dtype: categorical
+      nullable: false
+
+    # -----------------------------------------------------
+    # TEMPORAL
+    # -----------------------------------------------------
+    earliest_cr_line:
+      dtype: datetime
+      nullable: true
+
+    issue_year:
+      dtype: int
+      nullable: false
+      derived_from:
+        - issue_d
+
+    # -----------------------------------------------------
+    # TARGET
+    # -----------------------------------------------------
+    target:
+      dtype: int
+      nullable: false
+      derived_from:
+        - loan_status
+      allowed_values: [0, 1]
+
+
+# -----------------------------------------------------
+# TRANSFORMATIONS EXCEPTIONS (DECLARATIVE)
+# -----------------------------------------------------
+transformations:
+
+  numerical:
+    log_transform:
+      columns:
+        - loan_amnt
+        - annual_inc
+        - revol_bal
+        - total_bal_ex_mort
+
+    imputation:
+      strategy: median
+
+  categorical:
+    encoding:
+      strategy: one_hot_low_cardinality
+      max_cardinality: 20
+
+    frequency_encoding:
+      apply_to:
+        - addr_state
+        - purpose
+
+  temporal:
+    extract:
+      from: earliest_cr_line
+      features:
+        - credit_history_length_years
+
+
+# -----------------------------------------------------
+# OUTPUT CONTRACT
+# -----------------------------------------------------
+outputs:
+  include_target: true
+  enforce_no_nulls: true
+
+  expected_feature_types:
+    numerical: float
+    categorical_encoded: int
+
+  guarantees:
+    deterministic: true
+    no_leakage: true
+    train_inference_parity: true
+
+
+# -----------------------------------------------------
+# STATISTICAL EXPECTATIONS
+# -----------------------------------------------------
+statistics:
+  loan_amnt: {min: 500, max: 100000}
+  dti: {min: 0, max: 200}
+  annual_inc: {min: 0}
+  fico_score: {min: 300, max: 850}
+
+
+# -----------------------------------------------------
+# FEATURE GROUPING (FOR MODELING / EXPLAINABILITY)
+# -----------------------------------------------------
+feature_groups:
+
+  credit_profile:
+    - fico_score
+    - credit_history_length_years
+
+  financial:
+    - annual_inc
+    - dti
+    - loan_amnt
+
+  behavioral:
+    - delinq_2yrs
+    - inq_last_6mths
+
+  utilization:
+    - revol_util
+    - bc_util
+
+
+# -----------------------------------------------------
+# MONITORING / DRIFT
+# -----------------------------------------------------
+monitoring:
+  enable_drift_detection: true
+  drift_method: psi
+  reference_window: train
+
+
+# -----------------------------------------------------
+# GLOBAL CONTRACT SETTINGS
+# -----------------------------------------------------
+constraints:
+  max_feature_count: 300
+  min_feature_count: 20
+
+  forbid_raw_categorical_output: true
+  forbid_datetime_output: true
+
+  require_all_transformations_logged: true
