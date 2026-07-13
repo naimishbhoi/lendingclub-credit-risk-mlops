@@ -1,12 +1,12 @@
 version: 1
 
 pipeline:
-
   # ------------------------------------------------------
   # STEP 1 - Column Filtering
   # ------------------------------------------------------
   - name: select_eligible_features
     type: column_selector
+    source: artifacts/features/eligible_features.csv
 
   # ------------------------------------------------------
   # STEP 2 - Dtype Enforcement (CRITICAL)
@@ -15,26 +15,59 @@ pipeline:
     type: dtype_enforcer
 
   # ------------------------------------------------------
-  # STEP 3 - Temporal Feature Engineering
+  # STEP 3 - Target Mapping
   # ------------------------------------------------------
-  - name: credit_history_length
-    type: datetime_diff
-    start_column: earliest_cr_line
-    end_column: issue_year
-    output_column: credit_history_length_years
+  - name: target_mapper
+    type: label_mapper
+    source_column: loan_status
+    output_column: target
+    mapping_source: src/contracts/target_contract.yaml
+    drop_source_column: true
 
   # ------------------------------------------------------
-  # STEP 4 - Numerical Imputation
+  # STEP 4 - FICO Feature Engineering
+  # ------------------------------------------------------
+  - name: fico_score
+    type: fico_score_transformer
+    low_column: fico_range_low
+    high_column: fico_range_high
+    output_column: fico_score
+    drop_source_columns: false
+
+  # ------------------------------------------------------
+  # STEP 5 - Credit History Length
+  # ------------------------------------------------------
+  - name: credit_history_length
+    type: credit_history_length_transformer
+    start_column: earliest_cr_line
+    end_column: issue_d
+    output_column: credit_history_length_years
+    null_policy: preserve_null
+    invalid_negative_policy: fail
+
+  # ------------------------------------------------------
+  # STEP 6 - Issue Year Extraction
+  # ------------------------------------------------------
+  - name: issue_year_extractor
+    type: issue_year_transformer
+    source_column: issue_d
+    output_column: issue_year
+
+  # ------------------------------------------------------
+  # STEP 7 - Numerical Imputation
   # ------------------------------------------------------
   - name: numerical_imputer
     type: numerical_imputer
     strategy: median
+    exclude_columns:
+      - target
 
   # ------------------------------------------------------
-  # STEP 5 - Log Transform
+  # STEP 8 - Log Transform
   # ------------------------------------------------------
   - name: log_transformer
     type: log_transformer
+    method: log1p
     columns:
       - loan_amnt
       - annual_inc
@@ -42,16 +75,17 @@ pipeline:
       - total_bal_ex_mort
 
   # ------------------------------------------------------
-  # STEP 6 - Frequency Encoding (High Cardinality)
+  # STEP 9 - Frequency Encoding (High Cardinality)
   # ------------------------------------------------------
   - name: frequency_encoder
     type: frequency_encoder
     columns:
       - addr_state
       - purpose
+    persist_mappings: true
 
   # ------------------------------------------------------
-  # STEP 7 - One Hot Encoding (Low Cardinality)
+  # STEP 10 - One Hot Encoding (Low Cardinality)
   # ------------------------------------------------------
   - name: one_hot_encoder
     type: one_hot_encoder
@@ -59,11 +93,18 @@ pipeline:
       - addr_state
       - purpose
     max_cardinality: 20
+    handle_unknown: ignore
+    drop_original_columns: true
 
   # ------------------------------------------------------
-  # STEP 8 - Drop Raw Columns
+  # STEP 11 - Drop Raw Columns
   # ------------------------------------------------------
-  - name: drop_unused
+  - name: cleanup
     type: column_dropper
     drop_original_categorical: true
     drop_datetime: true
+    additional_columns:
+      - fico_range_low
+      - fico_range_high
+      - issue_d
+      - earliest_cr_line
