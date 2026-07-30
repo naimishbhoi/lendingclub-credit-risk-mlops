@@ -1,10 +1,11 @@
-version: 1
+version: "1.0.0"
 
 feature_set_name: "lendingclub_eligible_features_pipeline"
 description: >
   Contract defining input expectations, feature boundary, derived features,
   transformation policy, and output guarantees for the LendingClub feature pipeline.
 
+schema_hash: auto
 
 # -----------------------------------------------------
 # INPUT CONTRACT
@@ -18,21 +19,25 @@ inputs:
 
   mode_rules:
     train:
-      require_target: true
-      forbid_target_presence: true
+      require_target_source: true
+      forbid_mapped_target_input: true
+
+    test:
+      require_target_source: true
+      forbid_mapped_target_input: true
 
     inference:
-      require_target: false
-      forbid_target_presence: true
+      require_target_source: false
+      forbid_target_source: true
+      forbid_mapped_target_input: true
 
   columns:
     # -----------------------------------------------------
     # NUMERICAL
-    # -----------------------------------------------------1
+    # -----------------------------------------------------
     loan_amnt:
       dtype: float64
       nullable: false
-      transformation: log1p
 
     int_rate:
       dtype: float64
@@ -41,7 +46,6 @@ inputs:
     annual_inc:
       dtype: float64
       nullable: true
-      transformation: log1p
 
     dti:
       dtype: float64
@@ -50,7 +54,6 @@ inputs:
     revol_bal:
       dtype: float64
       nullable: false
-      transformation: log1p
 
     revol_util:
       dtype: float64
@@ -79,7 +82,6 @@ inputs:
     total_bal_ex_mort:
       dtype: float64
       nullable: true
-      transformation: log1p
 
     total_bc_limit:
       dtype: float64
@@ -92,6 +94,22 @@ inputs:
     fico_range_high:
       dtype: float64
       nullable: false
+
+    pct_tl_nvr_dlq:
+      dtype: float64
+      nullable: true
+
+    percent_bc_gt_75:
+      dtype: float64
+      nullable: true
+
+    mths_since_last_delinq:
+      dtype: float64
+      nullable: true
+
+    mths_since_recent_inq:
+      dtype: float64
+      nullable: true
 
     # -----------------------------------------------------
     # COUNT/DISCRETE
@@ -113,27 +131,31 @@ inputs:
       nullable: false
 
     acc_open_past_24mths:
-      dtype: int64
+      dtype: Int64
       nullable: true
 
     mort_acc:
-      dtype: int64
+      dtype: Int64
+      nullable: true
+
+    mo_sin_rcnt_tl:
+      dtype: Int64
       nullable: true
 
     num_actv_bc_tl:
-      dtype: int64
+      dtype: Int64
       nullable: true
 
     num_actv_rev_tl:
-      dtype: int64
+      dtype: Int64
       nullable: true
 
     num_bc_tl:
-      dtype: int64
+      dtype: Int64
       nullable: true
 
     pub_rec_bankruptcies:
-      dtype: int64
+      dtype: Int64
       nullable: true
 
     # -----------------------------------------------------
@@ -174,32 +196,28 @@ inputs:
       dtype: datetime64[ns]
       nullable: false
 
-    # -----------------------------------------------------
-    # TARGET VALIDATION
-    # -----------------------------------------------------
+  # -----------------------------------------------------
+  # TARGET VALIDATION
+  # -----------------------------------------------------
+  staging_column:
     loan_status:
       dtype: categorical
       nullable: false
+      train_only: true
+      role: target_source
 
 
 # -----------------------------------------------------
 # TARGET
 # -----------------------------------------------------
 targets:
-  loan_status:
+  default:
+    source_column: loan_status
     output_column: target
     dtype: int64
     nullable: false
     allowed_values: [0, 1]
-    train_only: true
     mapping_source: src/contracts/target_contract.yaml
-
-
-# -----------------------------------------------------
-# DROP COLUMNS AFTER TARGET CREATION
-# -----------------------------------------------------
-drop_columns:
-  - loan_status
 
 
 # -----------------------------------------------------
@@ -213,26 +231,31 @@ derived_features:
       - fico_range_low
       - fico_range_high
     method: average_fico_range
+    persistent: true
 
   issue_year:
     dtype: int64
     nullable: false
     source_column: issue_d
     method: extract_year
+    persistent: true
 
   credit_history_length_years:
     dtype: float64
-    nullable: true
+    nullable: false
     source_columns:
       - earliest_cr_line
       - issue_d
     method: years_difference
+    persistent: true
 
 
 # -----------------------------------------------------
 # TRANSFORMATION CONTRACT
 # -----------------------------------------------------
 transformations:
+  random_seed: 42
+
   numerical:
     log_transform:
       method: log1p
@@ -241,6 +264,10 @@ transformations:
         - annual_inc
         - revol_bal
         - total_bal_ex_mort
+        - tot_cur_bal
+        - total_rev_hi_lim
+        - total_bc_limit
+        - bc_open_to_buy
 
     imputation:
       strategy: median
@@ -263,18 +290,33 @@ transformations:
     derived_features:
       - credit_history_length_years
       - issue_year
+    drop_original_columns: true
 
 
 # -----------------------------------------------------
 # OUTPUT CONTRACT
 # -----------------------------------------------------
 outputs:
-  include_target: true
+  mode_rules:
+    train:
+      include_target: true
+
+    test:
+      include_target: true
+
+    inference:
+      include_target: false
+
   enforce_no_nulls: true
+
+  preserve_column_order: true
+  preserve_feature_names: true
+  preserve_feature_order: true
 
   expected_feature_types:
     numerical: float64
-    categorical_encoded: int64
+    one_hot_encoded: int64
+    frequency_encoded: float64
 
   guarantees:
     deterministic: true
@@ -284,23 +326,68 @@ outputs:
 
 
 # -----------------------------------------------------
-# STATISTICS EXCEPTIONS
+# FEATURE STATISTICAL CONSTRAINTS
 # -----------------------------------------------------
 statistics:
   loan_amnt: {min: 500, max: 100000}
   dti: {min: 0, max: 200}
   annual_inc: {min: 0}
+  int_rate: {min: 0, max: 100}
+  revol_util: {min: 0, max: 200}
+  pct_tl_nvr_dlq: {min: 0, max: 100}
+  percent_bc_gt_75: {min: 0, max: 100}
+
+  fico_range_low: {min: 300, max: 850}
+  fico_range_high: {min: 300, max: 850}
+
   fico_score: {min: 300, max: 850}
+  issue_year: {min: 2007}
+  credit_history_length_years: {min: 0}
+
+
+# -----------------------------------------------------
+# FEATURE LINEAGE
+# -----------------------------------------------------
+lineage:
+  generated_from:
+    fico_score:
+      - fico_range_low
+      - fico_range_high
+
+    issue_year:
+      - issue_d
+
+    credit_history_length_years:
+      - earliest_cr_line
+      - issue_d
+
+
+# -----------------------------------------------------
+# ARTIFACTS
+# -----------------------------------------------------
+artifacts:
+  persist:
+    imputer: true
+    encoder: true
+    frequency_encoder: true
+    feature_names: true
+    training_statistics: true
+    schema_snapshot: true
+    feature_contract_snapshot: true
+
 
 # -----------------------------------------------------
 # MONITORING / DRIFT
 # -----------------------------------------------------
 monitoring:
   enable_drift_detection: true
+  monitor_derived_features: true
+
   drift_method:
-    - numerical: psi
-    - categorical: jensen_shannon
-    - target: kl_divergence
+    numerical: psi
+    categorical: jensen_shannon
+    target: kl_divergence
+
   reference_window: train
 
 
@@ -311,9 +398,14 @@ constraints:
   max_feature_count: 500
   min_feature_count: 20
 
+  enforce_no_duplicate_columns: true
+
   forbid_raw_categorical_output: true
   forbid_datetime_output: true
+  forbid_staging_columns_output: true
+  forbid_duplicate_output_features: true
 
+  require_all_derived_features_generated: true
   require_all_transformations_logged: true
   require_feature_contract_validation: true
   require_schema_versioning: true
